@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 import logging
 import subprocess
 from dotenv import load_dotenv
@@ -33,17 +34,18 @@ def download_playlist(url):
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     os.makedirs(os.path.dirname(ARCHIVE_FILE), exist_ok=True)
     
-    # Include metadata, cover art, and playlist folder path template
+    # yt-dlp flags for playlist folders, metadata, and embedded cover art
     cmd = [
         "yt-dlp",
         "--download-archive", ARCHIVE_FILE,
         "--embed-metadata",
         "--embed-thumbnail",
-        "-o", f"{DOWNLOAD_DIR}/%(playlist_title,playlist)s/%(title)s.%(ext)s"
+        "--convert-thumbnails", "jpg",
+        "-o", f"{DOWNLOAD_DIR}/%(playlist_title,playlist|Playlists)s/%(title)s.%(ext)s"
     ]
     
     if AUDIO_ONLY:
-        cmd.extend(["-x", "--audio-format", "mp3"])
+        cmd.extend(["-x", "--audio-format", "mp3", "--audio-quality", "0"])
     else:
         cmd.extend(["-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"])
         
@@ -65,7 +67,7 @@ def upload_to_nextcloud():
             rel_path = os.path.relpath(local_path, DOWNLOAD_DIR)
             remote_path = os.path.join(NEXTCLOUD_FOLDER, rel_path).replace("\\", "/")
             
-            # Ensure remote target directory exists on Nextcloud
+            # Ensure remote target directory structure exists on Nextcloud
             remote_dir = os.path.dirname(remote_path)
             parts = remote_dir.strip('/').split('/')
             current_path = ""
@@ -76,7 +78,9 @@ def upload_to_nextcloud():
                         
             logging.info(f"Uploading {rel_path}...")
             client.upload_sync(remote_path=remote_path, local_path=local_path)
-            os.remove(local_path)
+
+    # Clean up local download directory after successful upload
+    shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
 
 def main():
     if not NEXTCLOUD_URL or not NEXTCLOUD_USER or not NEXTCLOUD_PASSWORD:
