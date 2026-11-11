@@ -1,9 +1,8 @@
-version: '3.8'
-
 services:
   yt-sync:
     build: .
     container_name: youtube-nextcloud-sync
+    restart: unless-stopped
     env_file:
       - .env
     volumes:
