@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  yt-sync:
+    build: .
+    container_name: youtube-nextcloud-sync
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
