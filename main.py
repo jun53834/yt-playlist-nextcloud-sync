@@ -22,7 +22,6 @@ DOWNLOAD_DIR = "/tmp/yt_downloads"
 ARCHIVE_FILE = "/app/data/download_history.txt"
 
 def get_webdav_client():
-    # Setup WebDAV connection parameters
     options = {
         'webdav_hostname': NEXTCLOUD_URL,
         'webdav_login': NEXTCLOUD_USER,
@@ -31,15 +30,16 @@ def get_webdav_client():
     return Client(options)
 
 def download_playlist(url):
-    # Create download folder
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     os.makedirs(os.path.dirname(ARCHIVE_FILE), exist_ok=True)
     
-    # Base yt-dlp command
+    # Include metadata, cover art, and playlist folder path template
     cmd = [
         "yt-dlp",
         "--download-archive", ARCHIVE_FILE,
-        "-o", f"{DOWNLOAD_DIR}/%(title)s.%(ext)s"
+        "--embed-metadata",
+        "--embed-thumbnail",
+        "-o", f"{DOWNLOAD_DIR}/%(playlist_title,playlist)s/%(title)s.%(ext)s"
     ]
     
     if AUDIO_ONLY:
@@ -53,23 +53,32 @@ def download_playlist(url):
     subprocess.run(cmd, check=True)
 
 def upload_to_nextcloud():
-    # Sync downloaded files to Nextcloud
     client = get_webdav_client()
     
-    # Create target directory if missing
     if not client.check(NEXTCLOUD_FOLDER):
         client.mkdir(NEXTCLOUD_FOLDER)
 
-    for filename in os.listdir(DOWNLOAD_DIR):
-        local_path = os.path.join(DOWNLOAD_DIR, filename)
-        if os.path.isfile(local_path):
-            remote_path = os.path.join(NEXTCLOUD_FOLDER, filename)
-            logging.info(f"Uploading {filename}...")
+    # Recursively upload directory tree to Nextcloud
+    for root, dirs, files in os.walk(DOWNLOAD_DIR):
+        for filename in files:
+            local_path = os.path.join(root, filename)
+            rel_path = os.path.relpath(local_path, DOWNLOAD_DIR)
+            remote_path = os.path.join(NEXTCLOUD_FOLDER, rel_path).replace("\\", "/")
+            
+            # Ensure remote target directory exists on Nextcloud
+            remote_dir = os.path.dirname(remote_path)
+            parts = remote_dir.strip('/').split('/')
+            current_path = ""
+            for part in parts:
+                current_path = f"{current_path}/{part}" if current_path else part
+                if not client.check(current_path):
+                    client.mkdir(current_path)
+                        
+            logging.info(f"Uploading {rel_path}...")
             client.upload_sync(remote_path=remote_path, local_path=local_path)
             os.remove(local_path)
 
 def main():
-    # Validate required credentials
     if not NEXTCLOUD_URL or not NEXTCLOUD_USER or not NEXTCLOUD_PASSWORD:
         logging.error("Missing required environment variables in .env file.")
         sys.exit(1)
