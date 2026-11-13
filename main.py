@@ -37,6 +37,7 @@ def download_playlist(url):
         "yt-dlp",
         "--download-archive", ARCHIVE_FILE,
         "--embed-metadata",
+        "--parse-metadata", "playlist_title:%(meta_album)s",
         "--embed-thumbnail",
         "--convert-thumbnails", "jpg",
         "-o", f"{DOWNLOAD_DIR}/%(playlist_title,playlist|Playlists)s/%(title)s.%(ext)s"
